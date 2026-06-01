@@ -43,25 +43,30 @@
 ## 📂 專案目錄結構 (Inside-Out View)
 
 ```text
-src/main/java/com/airdrop/
-├── domain/                           [Layer 1: 核心實體層] 純粹的商業邏輯與狀態
-│   ├── model/Peer.java               (Member B 負責：節點實體，包含 IP、Port 與連線狀態)
-│   └── model/FileTask.java           (Member B 負責：任務實體，紀錄檔案大小、雜湊值與傳輸進度)
+p2p-file-transfer/
+├── src/main/java/com/airdrop/
+│   ├── domain/                           [Layer 1: 核心實體層] 
+│   │   ├── model/Peer.java               (Member B: 節點實體)
+│   │   └── model/FileTask.java           (Member B: 傳輸任務實體)
+│   │
+│   ├── usecase/                          [Layer 2: 應用例層] 
+│   │   ├── DiscoverPeersUseCase.java     (Member B: 節點發現與剔除邏輯)
+│   │   └── SendFileUseCase.java          (Member B: 協調傳輸流程)
+│   │
+│   ├── adapter/                          [Layer 3: 介面轉接層] 
+│   │   ├── gateway/NetworkGateway.java   (Member A: 網路抽象介面)
+│   │   └── controller/CliController.java (Member C: 攔截並解析終端機指令)
+│   │
+│   ├── infrastructure/                   [Layer 4: 框架與驅動層] 
+│   │   ├── netty/NettyServer.java        (Member A: TCP 接收與 UDP 監聽)
+│   │   ├── netty/NettyClient.java        (Member A: TCP 發送與 UDP 廣播)
+│   │   └── cli/PicocliRunner.java        (Member C: 終端機 UI 渲染細節)
+│   │
+│   └── App.java                          (Member C: 程式進入點與依賴組裝)
 │
-├── usecase/                          [Layer 2: 應用例層] P2P 業務流程
-│   ├── DiscoverPeersUseCase.java     (Member B 負責：處理節點發現、存活確認與過期剔除邏輯)
-│   └── SendFileUseCase.java          (Member B 負責：協調檔案讀取、進度更新與網路發送流程)
-│
-├── adapter/                          [Layer 3: 介面轉接層] 資料格式與抽象介面轉換
-│   ├── gateway/NetworkGateway.java   (Member A 負責：定義網路通訊的「抽象介面」，供 UseCase 呼叫)
-│   └── controller/CliController.java (Member C 負責：解析 Picocli 的輸入指令，轉換後呼叫 UseCase)
-│
-├── infrastructure/                   [Layer 4: 框架與驅動層] 最外層實作細節
-│   ├── netty/NettyServer.java        (Member A 負責：實作 NetworkGateway，處理 TCP 接收與 UDP 監聽)
-│   ├── netty/NettyClient.java        (Member A 負責：實作 NetworkGateway，處理 TCP 發送與 UDP 廣播)
-│   └── cli/PicocliRunner.java        (Member C 負責：Picocli 框架啟動與終端機 UI 渲染)
-│
-└── App.java                          (Member C 負責：[Entry Point] 依賴注入、組裝各層元件)
+└── src/test/java/com/airdrop/            [測試層]
+    ├── usecase/SendFileUseCaseTest.java  (Member B: 測試業務邏輯)
+    └── infrastructure/NettyTest.java     (Member A: 測試網路連線與大檔案邊界)
 
 ```
 
