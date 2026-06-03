@@ -2,7 +2,9 @@ package com.airdrop.infrastructure.netty;
 
 import com.airdrop.domain.model.FileTask;
 import com.airdrop.domain.model.Peer;
-import com.airdrop.usecase.gateway.NetworkGateway;
+import com.airdrop.usecase.port.in.NetworkGateway;
+import com.airdrop.usecase.port.out.PeerDiscoveryListener;
+import com.airdrop.usecase.port.out.FileTransferListener;
 
 import java.io.IOException;
 
@@ -59,7 +61,7 @@ public class NettyNetworkGateway implements NetworkGateway {
     }
 
     @Override
-    public void startServer(int port, FileReceiverListener listener) throws IOException {
+    public void startServer(int port, FileTransferListener listener) throws IOException {
         try {
             server.startTcpServer(port, listener);
         } catch (InterruptedException e) {
