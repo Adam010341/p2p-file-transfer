@@ -60,6 +60,7 @@ p2p-file-transfer/
 │   ├── infrastructure/                   [Layer 4: 框架與驅動層] 
 │   │   ├── netty/NettyServer.java        (Member A: TCP 接收與 UDP 監聽)
 │   │   ├── netty/NettyClient.java        (Member A: TCP 發送與 UDP 廣播)
+
 │   │   └── cli/PicocliRunner.java        (Member C: 終端機 UI 渲染細節)
 │   │
 │   └── App.java                          (Member C: 程式進入點與依賴組裝)
