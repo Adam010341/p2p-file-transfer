@@ -1,4 +1,4 @@
-package com.airdrop.usecase.port.out;
+package com.airdrop.usecase.port.in;
 
 import com.airdrop.domain.model.Peer;
 
