@@ -50,11 +50,11 @@ p2p-file-transfer/
 │   │   └── model/FileTask.java           (Member B: 傳輸任務實體)
 │   │
 │   ├── usecase/                          [Layer 2: 應用例層] 
+│   │   ├── gateway/NetworkGateway.java   (Member A: 網路抽象介面)
 │   │   ├── DiscoverPeersUseCase.java     (Member B: 節點發現與剔除邏輯)
 │   │   └── SendFileUseCase.java          (Member B: 協調傳輸流程)
 │   │
 │   ├── adapter/                          [Layer 3: 介面轉接層] 
-│   │   ├── gateway/NetworkGateway.java   (Member A: 網路抽象介面)
 │   │   └── controller/CliController.java (Member C: 攔截並解析終端機指令)
 │   │
 │   ├── infrastructure/                   [Layer 4: 框架與驅動層] 
