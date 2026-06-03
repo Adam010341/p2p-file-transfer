@@ -99,12 +99,27 @@ public class NettyServer {
 
     private NetworkInterface findMulticastInterface() throws IOException {
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        NetworkInterface loopback = null;
         while (interfaces.hasMoreElements()) {
             NetworkInterface ni = interfaces.nextElement();
-            if (ni.isUp() && ni.supportsMulticast() && !ni.isLoopback()) {
-                return ni;
+            if (ni.isUp() && ni.supportsMulticast()) {
+                boolean hasIpv4 = false;
+                for (Enumeration<java.net.InetAddress> addresses = ni.getInetAddresses(); addresses.hasMoreElements();) {
+                    if (addresses.nextElement() instanceof java.net.Inet4Address) {
+                        hasIpv4 = true;
+                        break;
+                    }
+                }
+                if (hasIpv4) {
+                    if (!ni.isLoopback()) {
+                        return ni;
+                    } else {
+                        loopback = ni;
+                    }
+                }
             }
         }
+        if (loopback != null) return loopback;
         return NetworkInterface.getByInetAddress(java.net.InetAddress.getLocalHost());
     }
 
