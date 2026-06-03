@@ -1,7 +1,7 @@
 # p2p-file-transfer
 # 🚀 LAN P2P File Transfer (AirDrop Clone)
 
-這是一個基於區域網路（LAN）的 P2P 檔案傳輸命令列工具。專案採取純點對點架構，利用 UDP 廣播進行節點自動發現，並透過 TCP 進行高效的檔案傳輸，實現類似 AirDrop 的「零配置（Zero-configuration）」便利性。
+這是一個基於區域網路（LAN）的 P2P 檔案傳輸命令列工具。專案採取純點對點架構，利用 UDP 多播進行節點自動發現，並透過 TCP 進行高效的檔案傳輸，實現類似 AirDrop 的「零配置（Zero-configuration）」便利性。
 
 本專案為軟體工程期末專題，全程採用 **Vibe Coding**（結合 Antigravity 與 Gemini/Claude AI 代理）輔助開發，並嚴格遵循 **整潔架構 (Clean Architecture)** 原則。
 
@@ -35,7 +35,7 @@
 
 **[ 🧑‍💻 Member A & Member C 協作：底層實作與基礎建設 ]**
 
-* **網路驅動 (Member A)：** 實作 Netty 伺服器與客戶端，處理最困難的非同步 I/O、UDP 廣播與 TCP 通訊。
+* **網路驅動 (Member A)：** 實作 Netty 伺服器與客戶端，處理最困難的非同步 I/O、UDP 多播與 TCP 通訊。
 * **UI 驅動 (Member C)：** 處理 Picocli 的具體設定，以及進度條的終端機渲染。
 
 ---
@@ -49,18 +49,19 @@ p2p-file-transfer/
 │   │   ├── model/Peer.java               (Member B: 節點實體)
 │   │   └── model/FileTask.java           (Member B: 傳輸任務實體)
 │   │
-│   ├── usecase/                          [Layer 2: 應用例層] 
-│   │   ├── gateway/NetworkGateway.java   (Member A: 網路抽象介面)
-│   │   ├── DiscoverPeersUseCase.java     (Member B: 節點發現與剔除邏輯)
-│   │   └── SendFileUseCase.java          (Member B: 協調傳輸流程)
+│   ├── usecase/                          [Layer 2: 應用例層] 
+│   │   ├── port/in/NetworkGateway.java   (Member B 定義: 呼叫外層網路的抽象介面)
+│   │   ├── port/out/PeerDiscoveryListener.java (Member B 定義: 節點發現的回呼介面)
+│   │   ├── port/out/FileTransferListener.java (Member B 定義: 傳輸進度的回呼介面)
+│   │   ├── DiscoverPeersUseCase.java     (Member B: 節點發現與剔除邏輯)
+│   │   └── SendFileUseCase.java          (Member B: 協調傳輸流程)
 │   │
 │   ├── adapter/                          [Layer 3: 介面轉接層] 
 │   │   └── controller/CliController.java (Member C: 攔截並解析終端機指令)
 │   │
 │   ├── infrastructure/                   [Layer 4: 框架與驅動層] 
 │   │   ├── netty/NettyServer.java        (Member A: TCP 接收與 UDP 監聽)
-│   │   ├── netty/NettyClient.java        (Member A: TCP 發送與 UDP 廣播)
-
+│   │   ├── netty/NettyClient.java        (Member A: TCP 發送與 UDP 多播)
 │   │   └── cli/PicocliRunner.java        (Member C: 終端機 UI 渲染細節)
 │   │
 │   └── App.java                          (Member C: 程式進入點與依賴組裝)
