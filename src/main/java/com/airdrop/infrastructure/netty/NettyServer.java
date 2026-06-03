@@ -1,8 +1,9 @@
 package com.airdrop.infrastructure.netty;
 
+import com.airdrop.domain.model.FileTask;
 import com.airdrop.domain.model.Peer;
-import com.airdrop.usecase.port.out.FileTransferListener;
-import com.airdrop.usecase.port.out.PeerDiscoveryListener;
+import com.airdrop.usecase.port.in.FileTransferListener;
+import com.airdrop.usecase.port.in.PeerDiscoveryListener;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -74,7 +75,9 @@ public class NettyServer {
                          int port = Integer.parseInt(parts[2]);
                          String ip = packet.sender().getAddress().getHostAddress();
                          Peer peer = new Peer(name, ip, port);
-                         listener.onPeerDiscovered(peer);
+                         if (listener != null) {
+                             listener.onPeerDiscovered(peer);
+                         }
                      }
                  }
              }
@@ -88,6 +91,13 @@ public class NettyServer {
         NioDatagramChannel ch = (NioDatagramChannel) b.bind(MULTICAST_PORT).sync().channel();
         ch.joinGroup(new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT), ni).sync();
         udpChannel = ch;
+    }
+
+    public void stopUdpListener() {
+        if (udpChannel != null) {
+            udpChannel.close();
+            udpChannel = null;
+        }
     }
 
     public void stop() {
@@ -148,12 +158,16 @@ public class NettyServer {
                         String senderName = parts[3];
 
                         Peer sender = new Peer(senderName, ((InetSocketAddress)ctx.channel().remoteAddress()).getAddress().getHostAddress(), 0);
-                        listener.onReceiveStarted(taskId, fileName, fileSize, sender);
+                        
+                        FileTask task = new FileTask(taskId, fileName, "./downloaded_" + fileName, fileSize);
+                        if (listener != null) {
+                            listener.onProgressUpdated(task);
+                        }
 
                         // Switch pipeline to file receiving mode
                         metadataReceived = true;
                         ctx.pipeline().remove(LengthFieldBasedFrameDecoder.class);
-                        ctx.pipeline().addLast(new FileWriteHandler(listener, taskId, fileName, fileSize));
+                        ctx.pipeline().addLast(new FileWriteHandler(listener, task));
                         ctx.pipeline().remove(this);
                     }
                 } finally {
@@ -173,20 +187,14 @@ public class NettyServer {
 
     private static class FileWriteHandler extends ChannelInboundHandlerAdapter {
         private final FileTransferListener listener;
-        private final String taskId;
-        private final long fileSize;
-        private final String savePath;
+        private final FileTask task;
         
         private FileChannel fileChannel;
-        private long bytesReceived = 0;
 
-        public FileWriteHandler(FileTransferListener listener, String taskId, String fileName, long fileSize) throws IOException {
+        public FileWriteHandler(FileTransferListener listener, FileTask task) throws IOException {
             this.listener = listener;
-            this.taskId = taskId;
-            this.fileSize = fileSize;
-            // Save in current directory with prefix to avoid collision
-            this.savePath = "./downloaded_" + fileName; 
-            this.fileChannel = new FileOutputStream(savePath).getChannel();
+            this.task = task;
+            this.fileChannel = new FileOutputStream(task.getFilePath()).getChannel();
         }
 
         @Override
@@ -195,8 +203,10 @@ public class NettyServer {
             try {
                 int readable = buf.readableBytes();
                 buf.readBytes(fileChannel, readable);
-                bytesReceived += readable;
-                listener.onReceiveProgress(taskId, bytesReceived, fileSize);
+                task.setBytesTransferred(task.getBytesTransferred() + readable);
+                if (listener != null) {
+                    listener.onProgressUpdated(task);
+                }
             } finally {
                 buf.release();
             }
@@ -207,17 +217,23 @@ public class NettyServer {
             if (fileChannel != null) {
                 fileChannel.close();
             }
-            if (bytesReceived >= fileSize) {
-                listener.onReceiveCompleted(taskId, savePath);
+            if (task.getBytesTransferred() >= task.getFileSize()) {
+                if (listener != null) {
+                    listener.onProgressUpdated(task);
+                }
             } else {
-                listener.onReceiveFailed(taskId, new IOException("Connection closed before fully receiving file. Expected: " + fileSize + ", Received: " + bytesReceived));
+                if (listener != null) {
+                    listener.onError(task, "Connection closed before fully receiving file.");
+                }
             }
             super.channelInactive(ctx);
         }
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            listener.onReceiveFailed(taskId, cause);
+            if (listener != null) {
+                listener.onError(task, cause.getMessage());
+            }
             ctx.close();
         }
     }
