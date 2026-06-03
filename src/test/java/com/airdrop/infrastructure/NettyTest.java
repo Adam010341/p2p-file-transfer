@@ -95,7 +95,7 @@ public class NettyTest {
 
         int receiverPort = gateway2.getBoundTcpPort();
         Peer target = new Peer("Node-2", "127.0.0.1", receiverPort);
-        FileTask task = new FileTask("task-123", tempFile.getAbsolutePath(), tempFile.getName(), tempFile.length(), target);
+        FileTask task = new FileTask("task-123", tempFile.getAbsolutePath(), tempFile.getName(), tempFile.length());
 
         CountDownLatch sendLatch = new CountDownLatch(1);
 
@@ -144,6 +144,11 @@ public class NettyTest {
                     discovered.set(true);
                     discoverLatch.countDown();
                 }
+            }
+
+            @Override
+            public void onPeerLost(Peer peer) {
+                // Not tested here
             }
         });
 
