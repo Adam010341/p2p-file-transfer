@@ -2,7 +2,7 @@ package com.airdrop.infrastructure.netty;
 
 import com.airdrop.domain.model.FileTask;
 import com.airdrop.domain.model.Peer;
-import com.airdrop.usecase.gateway.NetworkGateway.FileTransferListener;
+import com.airdrop.usecase.port.out.FileTransferListener;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;

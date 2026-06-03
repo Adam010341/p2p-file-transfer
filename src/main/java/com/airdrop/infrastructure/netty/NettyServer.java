@@ -1,8 +1,8 @@
 package com.airdrop.infrastructure.netty;
 
 import com.airdrop.domain.model.Peer;
-import com.airdrop.usecase.gateway.NetworkGateway.FileReceiverListener;
-import com.airdrop.usecase.gateway.NetworkGateway.PeerDiscoveryListener;
+import com.airdrop.usecase.port.out.FileTransferListener;
+import com.airdrop.usecase.port.out.PeerDiscoveryListener;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -35,7 +35,7 @@ public class NettyServer {
     
     private int boundTcpPort = -1;
 
-    public void startTcpServer(int port, FileReceiverListener listener) throws InterruptedException {
+    public void startTcpServer(int port, FileTransferListener listener) throws InterruptedException {
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
          .channel(NioServerSocketChannel.class)
@@ -111,10 +111,10 @@ public class NettyServer {
     // --- Inner Handlers ---
 
     private static class MetadataHandler extends ChannelInboundHandlerAdapter {
-        private final FileReceiverListener listener;
+        private final FileTransferListener listener;
         private boolean metadataReceived = false;
 
-        public MetadataHandler(FileReceiverListener listener) {
+        public MetadataHandler(FileTransferListener listener) {
             this.listener = listener;
         }
 
@@ -157,7 +157,7 @@ public class NettyServer {
     }
 
     private static class FileWriteHandler extends ChannelInboundHandlerAdapter {
-        private final FileReceiverListener listener;
+        private final FileTransferListener listener;
         private final String taskId;
         private final long fileSize;
         private final String savePath;
@@ -165,7 +165,7 @@ public class NettyServer {
         private FileChannel fileChannel;
         private long bytesReceived = 0;
 
-        public FileWriteHandler(FileReceiverListener listener, String taskId, String fileName, long fileSize) throws IOException {
+        public FileWriteHandler(FileTransferListener listener, String taskId, String fileName, long fileSize) throws IOException {
             this.listener = listener;
             this.taskId = taskId;
             this.fileSize = fileSize;
