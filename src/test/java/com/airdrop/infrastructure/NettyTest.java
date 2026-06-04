@@ -3,8 +3,8 @@ package com.airdrop.infrastructure;
 import com.airdrop.domain.model.FileTask;
 import com.airdrop.domain.model.Peer;
 import com.airdrop.infrastructure.netty.NettyNetworkGateway;
-import com.airdrop.usecase.port.out.FileTransferListener;
-import com.airdrop.usecase.port.out.PeerDiscoveryListener;
+import com.airdrop.usecase.port.in.FileTransferListener;
+import com.airdrop.usecase.port.in.PeerDiscoveryListener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,44 +54,37 @@ public class NettyTest {
         CountDownLatch receiveLatch = new CountDownLatch(1);
         AtomicBoolean transferSuccess = new AtomicBoolean(false);
 
-        // Start Receiver (Gateway 2)
-        gateway2.startServer(0, new FileTransferListener() {
+        // Setup global listener for receiver (Gateway 2)
+        gateway2.setFileTransferListener(new FileTransferListener() {
             @Override
-            public void onReceiveStarted(String taskId, String fileName, long fileSize, Peer sender) {
-                System.out.println("Node-2 Receive started: " + fileName);
-            }
-
-            @Override
-            public void onReceiveProgress(String taskId, long bytesReceived, long totalBytes) {}
-
-            @Override
-            public void onReceiveCompleted(String taskId, String savedPath) {
-                System.out.println("Node-2 Receive completed: " + savedPath);
-                try {
-                    File receivedFile = new File(savedPath);
-                    byte[] receivedData = Files.readAllBytes(receivedFile.toPath());
-                    assertArrayEquals(originalData, receivedData, "Received data should exactly match sent data");
-                    receivedFile.delete();
-                    transferSuccess.set(true);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } finally {
-                    receiveLatch.countDown();
+            public void onProgressUpdated(FileTask task) {
+                if (task.getBytesTransferred() >= task.getFileSize()) {
+                    System.out.println("Node-2 Receive completed: " + task.getFilePath());
+                    try {
+                        File receivedFile = new File(task.getFilePath());
+                        if (receivedFile.exists() && receivedFile.length() == task.getFileSize()) {
+                            byte[] receivedData = Files.readAllBytes(receivedFile.toPath());
+                            assertArrayEquals(originalData, receivedData, "Received data should exactly match sent data");
+                            receivedFile.delete();
+                            transferSuccess.set(true);
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        receiveLatch.countDown();
+                    }
                 }
             }
 
             @Override
-            public void onReceiveFailed(String taskId, Throwable cause) {
-                cause.printStackTrace();
+            public void onError(FileTask task, String errorMessage) {
+                System.err.println("Node-2 Receive error: " + errorMessage);
                 receiveLatch.countDown();
             }
-
-            // Unused sender methods for receiver
-            @Override public void onSendStarted(String taskId) {}
-            @Override public void onSendProgress(String taskId, long bytesSent, long totalBytes) {}
-            @Override public void onSendCompleted(String taskId) {}
-            @Override public void onSendFailed(String taskId, Throwable cause) {}
         });
+
+        // Start Receiver
+        gateway2.startServer(0);
 
         int receiverPort = gateway2.getBoundTcpPort();
         Peer target = new Peer("Node-2", "127.0.0.1", receiverPort);
@@ -99,31 +92,25 @@ public class NettyTest {
 
         CountDownLatch sendLatch = new CountDownLatch(1);
 
-        // Start Sender (Gateway 1)
-        gateway1.sendFile(target, task, new FileTransferListener() {
+        // Setup global listener for sender (Gateway 1)
+        gateway1.setFileTransferListener(new FileTransferListener() {
             @Override
-            public void onSendStarted(String taskId) {
-                System.out.println("Node-1 Send started.");
-            }
-            @Override
-            public void onSendProgress(String taskId, long bytesSent, long totalBytes) {}
-            @Override
-            public void onSendCompleted(String taskId) {
-                System.out.println("Node-1 Send completed.");
-                sendLatch.countDown();
-            }
-            @Override
-            public void onSendFailed(String taskId, Throwable cause) {
-                cause.printStackTrace();
-                sendLatch.countDown();
+            public void onProgressUpdated(FileTask task) {
+                if (task.getBytesTransferred() >= task.getFileSize()) {
+                    System.out.println("Node-1 Send completed.");
+                    sendLatch.countDown();
+                }
             }
 
-            // Unused receiver methods for sender
-            @Override public void onReceiveStarted(String taskId, String fileName, long fileSize, Peer sender) {}
-            @Override public void onReceiveProgress(String taskId, long bytesReceived, long totalBytes) {}
-            @Override public void onReceiveCompleted(String taskId, String savedPath) {}
-            @Override public void onReceiveFailed(String taskId, Throwable cause) {}
+            @Override
+            public void onError(FileTask task, String errorMessage) {
+                System.err.println("Node-1 Send error: " + errorMessage);
+                sendLatch.countDown();
+            }
         });
+
+        // Start Sender (Gateway 1)
+        gateway1.sendFile(target, task);
 
         assertTrue(sendLatch.await(5, TimeUnit.SECONDS), "File sending should complete within 5 seconds");
         assertTrue(receiveLatch.await(5, TimeUnit.SECONDS), "File receiving should complete within 5 seconds");
@@ -136,7 +123,7 @@ public class NettyTest {
         AtomicBoolean discovered = new AtomicBoolean(false);
 
         // Gateway 2 listens for peers
-        gateway2.startListeningForPeers(new PeerDiscoveryListener() {
+        gateway2.startDiscovery(new PeerDiscoveryListener() {
             @Override
             public void onPeerDiscovered(Peer peer) {
                 if ("Node-1".equals(peer.getName())) {
@@ -156,16 +143,11 @@ public class NettyTest {
         gateway1.startBroadcasting("Node-1", 9999);
 
         // Wait up to 5 seconds for the UDP packet to be received
-        // UDP Multicast can be tricky on some local OS network stacks without internet,
-        // but it should work if loopback multicast is enabled.
         boolean success = discoverLatch.await(5, TimeUnit.SECONDS);
         
-        // We clean up gracefully whether it passed or timed out
         gateway1.stopBroadcasting();
-        gateway2.stopListeningForPeers();
+        gateway2.stopDiscovery();
         
-        // Assert true. If it fails on some local environments (e.g., CI without multicast), 
-        // developers may need to mock this or enable local multicast routing.
         assertTrue(success, "Node-2 should have discovered Node-1 via UDP Multicast");
     }
 }

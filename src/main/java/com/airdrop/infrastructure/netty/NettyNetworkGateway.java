@@ -2,9 +2,9 @@ package com.airdrop.infrastructure.netty;
 
 import com.airdrop.domain.model.FileTask;
 import com.airdrop.domain.model.Peer;
-import com.airdrop.usecase.port.in.NetworkGateway;
-import com.airdrop.usecase.port.out.PeerDiscoveryListener;
-import com.airdrop.usecase.port.out.FileTransferListener;
+import com.airdrop.usecase.port.out.NetworkGateway;
+import com.airdrop.usecase.port.in.PeerDiscoveryListener;
+import com.airdrop.usecase.port.in.FileTransferListener;
 
 import java.io.IOException;
 
@@ -14,6 +14,7 @@ public class NettyNetworkGateway implements NetworkGateway {
     private final NettyClient client;
     
     private String localPeerName = "AirDrop-Node";
+    private FileTransferListener fileTransferListener;
 
     public NettyNetworkGateway() {
         this.server = new NettyServer();
@@ -28,7 +29,10 @@ public class NettyNetworkGateway implements NetworkGateway {
         return server.getBoundTcpPort();
     }
 
-    @Override
+    public void setFileTransferListener(FileTransferListener listener) {
+        this.fileTransferListener = listener;
+    }
+
     public void startBroadcasting(String localPeerName, int tcpPort) throws IOException {
         this.localPeerName = localPeerName;
         try {
@@ -39,48 +43,42 @@ public class NettyNetworkGateway implements NetworkGateway {
         }
     }
 
-    @Override
     public void stopBroadcasting() {
         client.stopUdpPublisher();
     }
 
     @Override
-    public void startListeningForPeers(PeerDiscoveryListener listener) throws IOException {
+    public void startDiscovery(PeerDiscoveryListener listener) {
         try {
             server.startUdpMulticastListener(listener);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Failed to start UDP Multicast listener", e);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
     @Override
-    public void stopListeningForPeers() {
-        // Ideally we would close just the UDP channel in NettyServer
-        // For simplicity in MVP, we might leave it open or handle in shutdown
+    public void stopDiscovery() {
+        server.stopUdpListener(); // Will add this method to NettyServer
     }
 
-    @Override
-    public void startServer(int port, FileTransferListener listener) throws IOException {
+    public void startServer(int port) throws IOException {
         try {
-            server.startTcpServer(port, listener);
+            server.startTcpServer(port, fileTransferListener);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Failed to start TCP Server", e);
         }
     }
 
-    @Override
     public void stopServer() {
         server.stop();
     }
 
     @Override
-    public void sendFile(Peer target, FileTask task, FileTransferListener listener) {
-        client.sendFile(localPeerName, target, task, listener);
+    public void sendFile(Peer target, FileTask task) {
+        client.sendFile(localPeerName, target, task, fileTransferListener);
     }
 
-    @Override
     public void cancelTransfer(String taskId) {
         client.cancelTransfer(taskId);
     }

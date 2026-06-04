@@ -2,7 +2,7 @@ package com.airdrop.infrastructure.netty;
 
 import com.airdrop.domain.model.FileTask;
 import com.airdrop.domain.model.Peer;
-import com.airdrop.usecase.port.out.FileTransferListener;
+import com.airdrop.usecase.port.in.FileTransferListener;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -91,7 +91,9 @@ public class NettyClient {
 
         b.connect(target.getIp(), target.getPort()).addListener((ChannelFutureListener) future -> {
             if (!future.isSuccess()) {
-                listener.onSendFailed(task.getId(), future.cause());
+                if (listener != null) {
+                    listener.onError(task, future.cause().getMessage());
+                }
             }
         });
     }
@@ -147,11 +149,15 @@ public class NettyClient {
         @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
             activeTransfers.put(task.getId(), ctx.channel());
-            listener.onSendStarted(task.getId());
+            if (listener != null) {
+                listener.onProgressUpdated(task);
+            }
 
             File file = new File(task.getFilePath());
             if (!file.exists() || !file.isFile()) {
-                listener.onSendFailed(task.getId(), new FileNotFoundException("File not found: " + task.getFilePath()));
+                if (listener != null) {
+                    listener.onError(task, "File not found: " + task.getFilePath());
+                }
                 ctx.close();
                 return;
             }
@@ -173,17 +179,25 @@ public class NettyClient {
             sendFileFuture.addListener(new ChannelProgressiveFutureListener() {
                 @Override
                 public void operationProgressed(ChannelProgressiveFuture future, long progress, long total) {
-                    listener.onSendProgress(task.getId(), progress, total < 0 ? file.length() : total);
+                    task.setBytesTransferred(progress);
+                    if (listener != null) {
+                        listener.onProgressUpdated(task);
+                    }
                 }
 
                 @Override
                 public void operationComplete(ChannelProgressiveFuture future) {
                     activeTransfers.remove(task.getId());
                     if (future.isSuccess()) {
-                        listener.onSendCompleted(task.getId());
+                        task.setBytesTransferred(file.length());
+                        if (listener != null) {
+                            listener.onProgressUpdated(task);
+                        }
                         ctx.close(); // Close connection after sending completes
                     } else {
-                        listener.onSendFailed(task.getId(), future.cause());
+                        if (listener != null) {
+                            listener.onError(task, future.cause().getMessage());
+                        }
                         ctx.close();
                     }
                 }
@@ -193,7 +207,9 @@ public class NettyClient {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             activeTransfers.remove(task.getId());
-            listener.onSendFailed(task.getId(), cause);
+            if (listener != null) {
+                listener.onError(task, cause.getMessage());
+            }
             ctx.close();
         }
 
